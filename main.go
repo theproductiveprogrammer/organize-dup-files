@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
@@ -32,8 +33,8 @@ func main() {
 		f_ = append(f_, f__...)
 	}
 
-	for _, fname := range f_ {
-		err := mv(fname, args.Dst)
+	for _, fpath := range f_ {
+		err := mv(fpath, args.Dst)
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(1)
@@ -42,8 +43,8 @@ func main() {
 
 }
 
-func mv(fname string, dst string) error {
-	f, err := os.Open(fname)
+func mv(fpath string, dst string) error {
+	f, err := os.Open(fpath)
 	if err != nil {
 		return err
 	}
@@ -59,7 +60,22 @@ func mv(fname string, dst string) error {
 		if _, err := io.Copy(h, f); err != nil {
 			return err
 		}
-		fmt.Printf("%x\t%s\t%s\n", h.Sum(nil), fname, dst)
+		sha := hex.EncodeToString(h.Sum(nil))
+		name := filepath.Base(fpath)
+
+		if len(name) > 32 {
+			ext := filepath.Ext(fpath)
+			sz := 32 - len(ext)
+			if sz < 0 {
+				ext = ext[0:32]
+				sz = 0
+			}
+			name = name[0:sz] + ext
+		}
+		d_ := filepath.Join(dst, sha[0:2], sha+"__"+name)
+		if d_ != fpath {
+			fmt.Printf("%s\t%s\n", fpath, d_)
+		}
 	}
 
 	return nil
