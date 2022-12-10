@@ -1,21 +1,25 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/jessevdk/go-flags"
 )
 
 type args struct {
-	src string
+	Src string `short:"s" long:"src" default:"*.*" description:"the source path (glob patterns allowed)"`
 }
 
 func main() {
 	args := args{}
-	loadArgs(&args)
+	_, err := flags.Parse(&args)
+	if err != nil {
+		os.Exit(1)
+	}
 
-	f_, err := filepath.Glob(args.src)
+	f_, err := filepath.Glob(args.Src)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -23,10 +27,4 @@ func main() {
 	for _, fname := range f_ {
 		fmt.Println(fname)
 	}
-}
-
-func loadArgs(args *args) {
-	flag.StringVar(&args.src, "src", "*.*", "the source path (glob patterns allowed)")
-
-	flag.Parse()
 }
