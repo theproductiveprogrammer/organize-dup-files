@@ -1,7 +1,9 @@
 package main
 
 import (
+	"crypto/sha256"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -31,6 +33,34 @@ func main() {
 	}
 
 	for _, fname := range f_ {
-		fmt.Println(fname)
+		err := mv(fname, args.Dst)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
 	}
+
+}
+
+func mv(fname string, dst string) error {
+	f, err := os.Open(fname)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	fi, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	if fi.Mode().IsRegular() {
+
+		h := sha256.New()
+		if _, err := io.Copy(h, f); err != nil {
+			return err
+		}
+		fmt.Printf("%x\t%s\t%s\n", h.Sum(nil), fname, dst)
+	}
+
+	return nil
 }
