@@ -25,11 +25,8 @@ type args struct {
  * otherwise merge the matching files into the destination
  */
 func main() {
-	args := args{}
-	_, err := flags.Parse(&args)
-	if err != nil {
-		os.Exit(1)
-	}
+	var err error
+	args := loadUserArgs()
 	if len(args.Ext) == 0 {
 		err = listExts(args)
 	} else {
@@ -41,6 +38,23 @@ func main() {
 		os.Exit(1)
 	}
 
+}
+
+func loadUserArgs() args {
+	args := args{}
+	_, err := flags.Parse(&args)
+	if err != nil {
+		os.Exit(1)
+	}
+	exts := args.Ext
+	args.Ext = []string{}
+	for _, ext := range exts {
+		if ext[0] != '.' {
+			ext = "." + ext
+		}
+		args.Ext = append(args.Ext, ext)
+	}
+	return args
 }
 
 /*  way/
@@ -125,20 +139,30 @@ type rule struct {
 }
 
 func loadSrcs(args args, rules *[]rule) error {
-	f__, err := filepath.Glob(args.Src)
-	if err != nil {
-		return err
-	}
-	fmt.Println(f__)
-	/*
-		for _, f := range f__ {
-			err := loadF(args.Dst, f, rules)
-			if err != nil {
-				return err
+	return filepath.WalkDir(args.Src, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() {
+			if extMatches(args.Ext, filepath.Ext(path)) {
+				err := loadF(path, rules)
+				if err != nil {
+					return err
+				}
 			}
 		}
-	*/
-	return nil
+
+		return nil
+	})
+}
+
+func extMatches(exts []string, ext string) bool {
+	for _, ext_ := range exts {
+		if ext_ == ext {
+			return true
+		}
+	}
+	return false
 }
 
 func mergeDst(args args, rules *[]rule) error {
@@ -150,7 +174,7 @@ func describe(rules []rule) {
 	}
 }
 
-func loadF(dst string, fpath string, rules *[]rule) error {
+func loadF(fpath string, rules *[]rule) error {
 	for _, r := range *rules {
 		if r.orig == fpath {
 			return nil
@@ -162,15 +186,6 @@ func loadF(dst string, fpath string, rules *[]rule) error {
 		return err
 	}
 	defer f.Close()
-
-	fi, err := f.Stat()
-	if err != nil {
-		return err
-	}
-
-	if fi.IsDir() {
-		return nil
-	}
 
 	h := sha256.New()
 	if _, err := io.Copy(h, f); err != nil {
