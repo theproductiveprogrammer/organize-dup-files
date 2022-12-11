@@ -251,6 +251,11 @@ func find_on_disk_1(src *srcInfo, dstf string, mkdir *[]string) (string, error) 
 	err := filepath.WalkDir(dstf, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			if os.IsNotExist(err) {
+				for _, dir := range *mkdir {
+					if dir == dstf {
+						return nil
+					}
+				}
 				*mkdir = append(*mkdir, dstf)
 				return nil
 			}
