@@ -113,7 +113,7 @@ func loadUserArgs() args {
 	exts := args.Ext
 	args.Ext = []string{}
 	for _, ext := range exts {
-		if ext[0] != '.' {
+		if len(ext) > 0 && ext[0] != '.' {
 			ext = "." + ext
 		}
 		args.Ext = append(args.Ext, ext)
