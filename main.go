@@ -17,8 +17,8 @@ import (
 )
 
 type args struct {
-	Src string   `short:"s" long:"src" default:"." description:"the source folder/file (default .)"`
-	Dst string   `short:"d" long:"dst" default:"." description:"the destination folder (default .)"`
+	Src string   `short:"s" long:"src" default:"." description:"the source folder/file"`
+	Dst string   `short:"d" long:"dst" default:"." description:"the destination folder"`
 	Ext []string `short:"e" long:"ext" description:"a list of file extensions to consider"`
 }
 
