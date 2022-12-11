@@ -209,7 +209,7 @@ func mergeDst_1(orgf *orgF, src *srcInfo) error {
 	for i, dst := range orgf.dst_i {
 		if dst.sha == src.sha {
 			src.dst_ndx = i
-			src.todo = "exists"
+			src.todo = "keep"
 			return nil
 		}
 	}
