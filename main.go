@@ -20,6 +20,7 @@ type args struct {
 	Src string   `short:"s" long:"src" default:"." description:"the source folder/file"`
 	Dst string   `short:"d" long:"dst" default:"." description:"the destination folder"`
 	Ext []string `short:"e" long:"ext" description:"a list of file extensions to consider"`
+	Psv bool     `long:"preserve-file-names" description:"if provided, preserve the source filename (default truncates/clean them)"`
 }
 
 type srcInfo struct {
@@ -63,6 +64,7 @@ type orgF struct {
 	src_i []srcInfo
 	dst_i []dstInfo
 	mkdir []string
+	clean bool
 }
 
 /*    way/
@@ -82,6 +84,7 @@ func main() {
 			src_i: []srcInfo{},
 			dst_i: []dstInfo{},
 			mkdir: []string{},
+			clean: !args.Psv,
 		}
 		err = mergeMatchingFiles(orgf)
 	}
@@ -373,10 +376,17 @@ func loadSrc(fpath string, orgf *orgF) error {
 		return err
 	}
 
+	var clean_name string
+	if orgf.clean {
+		clean_name = clean_1(filepath.Base(fpath))
+	} else {
+		clean_name = filepath.Base(fpath)
+	}
+
 	orgf.src_i = append(orgf.src_i, srcInfo{
 		path:       fpath,
 		sha:        sha,
-		clean_name: clean_1(filepath.Base(fpath)),
+		clean_name: clean_name,
 	})
 
 	return nil
