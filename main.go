@@ -42,6 +42,7 @@ type orgF struct {
 	ext_s []string
 	src_i []srcInfo
 	dst_i []dstInfo
+	mkdir []string
 }
 
 /*    way/
@@ -60,6 +61,7 @@ func main() {
 			ext_s: args.Ext,
 			src_i: []srcInfo{},
 			dst_i: []dstInfo{},
+			mkdir: []string{},
 		}
 		err = mergeMatchingFiles(orgf)
 	}
@@ -218,6 +220,7 @@ func mergeDst_1(orgf *orgF, src *srcInfo) error {
 	err := filepath.WalkDir(dstf, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			if os.IsNotExist(err) {
+				orgf.mkdir = append(orgf.mkdir, dstf)
 				return nil
 			}
 			return err
@@ -274,6 +277,9 @@ func describe(orgf orgF) {
 		fmt.Printf("%+v\n", rule)
 	}
 	for _, rule := range orgf.dst_i {
+		fmt.Printf("%+v\n", rule)
+	}
+	for _, rule := range orgf.mkdir {
 		fmt.Printf("%+v\n", rule)
 	}
 }
