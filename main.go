@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"github.com/jessevdk/go-flags"
 )
@@ -18,6 +19,29 @@ type args struct {
 	Src string   `short:"s" long:"src" default:"." description:"the source folder/file (default .)"`
 	Dst string   `short:"d" long:"dst" default:"." description:"the destination folder (default .)"`
 	Ext []string `short:"e" long:"ext" description:"a list of file extensions to consider"`
+}
+
+type srcInfo struct {
+	path string
+	sha  string
+
+	clean_name string
+	dst_ndx    int
+
+	todo string
+}
+
+type dstInfo struct {
+	path string
+	sha  string
+}
+
+type orgF struct {
+	src_f string
+	dst_f string
+	ext_s []string
+	src_i []srcInfo
+	dst_i []dstInfo
 }
 
 /*    way/
@@ -30,7 +54,14 @@ func main() {
 	if len(args.Ext) == 0 {
 		err = listExts(args)
 	} else {
-		err = mergeMatchingFiles(args)
+		orgf := orgF{
+			src_f: args.Src,
+			dst_f: args.Dst,
+			ext_s: args.Ext,
+			src_i: []srcInfo{},
+			dst_i: []dstInfo{},
+		}
+		err = mergeMatchingFiles(orgf)
 	}
 
 	if err != nil {
@@ -113,39 +144,31 @@ func listExts(args args) error {
  * with files existing in the destination to
  * describe how the sources move into the destination
  */
-func mergeMatchingFiles(args args) error {
-	rules := []rule{}
+func mergeMatchingFiles(orgf orgF) error {
 
-	err := loadSrcs(args, &rules)
+	err := loadSrcs(&orgf)
 	if err != nil {
 		return err
 	}
 
-	err = mergeDst(args, &rules)
+	err = mergeDst(&orgf)
 	if err != nil {
 		return err
 	}
 
-	describe(rules)
+	describe(orgf)
 
 	return nil
 }
 
-type rule struct {
-	orig string
-	sha  string
-
-	clean_name string
-}
-
-func loadSrcs(args args, rules *[]rule) error {
-	return filepath.WalkDir(args.Src, func(path string, d fs.DirEntry, err error) error {
+func loadSrcs(orgf *orgF) error {
+	return filepath.WalkDir(orgf.src_f, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		if !d.IsDir() {
-			if extMatches(args.Ext, filepath.Ext(path)) {
-				err := loadF(path, rules)
+			if extMatches(orgf.ext_s, filepath.Ext(path)) {
+				err := loadSrc(path, orgf)
 				if err != nil {
 					return err
 				}
@@ -165,59 +188,193 @@ func extMatches(exts []string, ext string) bool {
 	return false
 }
 
-func mergeDst(args args, rules *[]rule) error {
+/*    way/
+ * look for existing matching files in the destination
+ * or create a new entry for such a file
+ */
+func mergeDst(orgf *orgF) error {
+	for i, _ := range orgf.src_i {
+		err := mergeDst_1(orgf, &orgf.src_i[i])
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
-func describe(rules []rule) {
-	for _, rule := range rules {
-		fmt.Printf("%+v\n", rule)
-	}
-}
 
-func loadF(fpath string, rules *[]rule) error {
-	for _, r := range *rules {
-		if r.orig == fpath {
+func mergeDst_1(orgf *orgF, src *srcInfo) error {
+
+	for i, dst := range orgf.dst_i {
+		if dst.sha == src.sha {
+			src.dst_ndx = i
+			src.todo = "exists"
 			return nil
 		}
 	}
 
-	f, err := os.Open(fpath)
+	var found string
+	dstf := filepath.Join(orgf.dst_f, src.sha[0:2])
+	pfx := src.sha + "__"
+	err := filepath.WalkDir(dstf, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
+			return err
+		}
+		if path == dstf {
+			return nil
+		}
+		if d.IsDir() {
+			return filepath.SkipDir
+		}
+		if strings.HasPrefix(path, pfx) {
+			found = path
+		}
+		return nil
+	})
 	if err != nil {
 		return err
 	}
-	defer f.Close()
 
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
+	if len(found) == 0 {
+
+		orgf.dst_i = append(orgf.dst_i, dstInfo{
+			path: filepath.Join(dstf, pfx+src.clean_name),
+			sha:  src.sha,
+		})
+
+		src.todo = "move"
+		src.dst_ndx = len(orgf.dst_i) - 1
+
+		return nil
+	}
+
+	sha, err := shasum(found)
+	if err != nil {
+		return err
+	}
+	if sha != src.sha {
+		return errors.New("File " + found + " has a non-matching sha (" + sha + ")")
+	}
+
+	orgf.dst_i = append(orgf.dst_i, dstInfo{
+		path: found,
+		sha:  sha,
+	})
+
+	src.todo = "exists"
+	src.dst_ndx = len(orgf.dst_i) - 1
+
+	return nil
+}
+
+func describe(orgf orgF) {
+	for _, rule := range orgf.src_i {
+		fmt.Printf("%+v\n", rule)
+	}
+	for _, rule := range orgf.dst_i {
+		fmt.Printf("%+v\n", rule)
+	}
+}
+
+func loadSrc(fpath string, orgf *orgF) error {
+	sha, err := shasum(fpath)
+	if err != nil {
 		return err
 	}
 
-	*rules = append(*rules, rule{
-		orig:       fpath,
-		sha:        hex.EncodeToString(h.Sum(nil)),
+	orgf.src_i = append(orgf.src_i, srcInfo{
+		path:       fpath,
+		sha:        sha,
 		clean_name: clean_1(filepath.Base(fpath)),
 	})
 
 	return nil
 }
 
-func clean_1(n string) string {
-	m := regexp.MustCompile(`[^.A-Za-z0-9]+`)
-	name := m.ReplaceAllString(n, "_")
-
-	if len(name) > 32 {
-		ext := filepath.Ext(n)
-		sz := 32 - len(ext)
-		if sz < 0 {
-			ext = ext[0:32]
-			sz = 0
-		}
-		name = name[0:sz] + ext
+func shasum(fpath string) (string, error) {
+	f, err := os.Open(fpath)
+	if err != nil {
+		return "", err
 	}
-	return name
+	defer f.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-func mv(fpath string, dst string) error {
-	//rule.clean_name = filepath.Join(dst, rule.sha[0:2], rule.sha+"__"+name)
-	return nil
+/*  understand/
+ * because we have a unique sha as the name, we only need
+ * to keep what we think is valid text to give it more context
+ */
+var m1 *regexp.Regexp = regexp.MustCompile(`[^A-Za-z0-9*~!@#$%^&*]+`)
+var m2 *regexp.Regexp = regexp.MustCompile(`^.*?[A-Za-z][A-Za-z][A-Za-z]+`)
+
+func clean_1(n string) string {
+	ext := filepath.Ext(n)
+	n = n[:len(n)-len(ext)]
+	name := m1.ReplaceAllString(n, "_")
+
+	s := strings.Split(name, "_")
+	r := []string{}
+	for _, s_ := range s {
+		s_ = m2.FindString(s_)
+		if len(s_) > 0 {
+			r = append(r, s_)
+		}
+	}
+
+	name = strings.Join(r, "_")
+
+	return resize_1(name, ext)
+}
+
+/*    problem/
+ * we want the file size (name + ext) to be less than 32 characters
+ *
+ *    understand/
+ * options
+ *    a_really_long_name_with_no_extension
+ *    a_really_long_name_with.extension
+ *    a_really_long_name_with.a_really_long_extension
+ *    a_name.with_a_really_long_extension
+ *    .a_really_long_extension_with_no_name
+ *
+ *    way/
+ * truncate the name and keep the extension (as long as we have at least 8 characters
+ * the original name)
+ */
+func resize_1(name, ext string) string {
+	sz := len(name)
+	sz_e := len(ext)
+
+	if sz+sz_e <= 32 {
+		return name + ext
+	}
+
+	if sz == 0 {
+		return ext[0:32]
+	}
+
+	if sz_e == 0 {
+		return name[0:32]
+	}
+
+	nsz := 32 - sz_e
+
+	if nsz < 8 {
+		if sz < 8 {
+			sz_e = 32 - sz
+			nsz = sz
+		} else {
+			sz_e = 24
+			nsz = 8
+		}
+	}
+
+	return name[0:nsz] + ext[0:sz_e]
 }
