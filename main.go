@@ -230,38 +230,31 @@ func mergeDst(orgf *orgF) error {
 	return nil
 }
 
-/*    way/
- * find an existing destination match for the source
- * (in memory or on disk) and set the appropriate
- * action (keep, move, rmrf)
- */
-func mergeDst_1(orgf *orgF, src *srcInfo) error {
+func isSameFile(f1, f2 string) bool {
+	if f1 == f2 {
+		return true
+	}
+	p1, e1 := filepath.Abs(f1)
+	p2, e2 := filepath.Abs(f2)
+	return e1 == nil && e2 == nil && p1 == p2
+}
 
-	for i, dst := range orgf.dst_i {
+func find_in_memory_1(src *srcInfo, dst_i []dstInfo) int {
+	for i, dst := range dst_i {
 		if dst.sha == src.sha {
-			src.dst_ndx = i
-			if dst.path == src.path {
-				src.todo = "keep"
-			} else {
-				p1, e1 := filepath.Abs(dst.path)
-				p2, e2 := filepath.Abs(src.path)
-				if e1 == nil && e2 == nil && p1 == p2 {
-					src.todo = "keep"
-				} else {
-					src.todo = "rmrf"
-				}
-			}
-			return nil
+			return i
 		}
 	}
+	return -1
+}
 
+func find_on_disk_1(src *srcInfo, dstf string, mkdir *[]string) (string, error) {
 	var found string
-	dstf := filepath.Join(orgf.dst_f, src.sha[0:2])
 	pfx := src.sha + "__"
 	err := filepath.WalkDir(dstf, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			if os.IsNotExist(err) {
-				orgf.mkdir = append(orgf.mkdir, dstf)
+				*mkdir = append(*mkdir, dstf)
 				return nil
 			}
 			return err
@@ -277,40 +270,71 @@ func mergeDst_1(orgf *orgF, src *srcInfo) error {
 		}
 		return nil
 	})
+
+	if len(found) > 0 {
+		sha, err := shasum(found)
+		if err != nil {
+			return "", err
+		}
+		if sha != src.sha {
+			return "", errors.New("File " + found + " has a non-matching sha (" + sha + ")")
+		}
+	}
+
+	return found, err
+}
+
+/*    way/
+ * find an existing destination match for the source
+ * (in memory or on disk) or create a new destination
+ * entry, then set the appropriate action (keep, move, rmrf)
+ */
+func mergeDst_1(orgf *orgF, src *srcInfo) error {
+
+	i := find_in_memory_1(src, orgf.dst_i)
+	if i >= 0 {
+		src.dst_ndx = i
+		if isSameFile(orgf.dst_i[i].path, src.path) {
+			src.todo = "keep"
+		} else {
+			src.todo = "rmrf"
+		}
+		return nil
+	}
+
+	dstf := filepath.Join(orgf.dst_f, src.sha[0:2])
+	found, err := find_on_disk_1(src, dstf, &orgf.mkdir)
 	if err != nil {
 		return err
 	}
 
-	if len(found) == 0 {
+	src.dst_ndx = len(orgf.dst_i)
+	if len(found) > 0 {
 
 		orgf.dst_i = append(orgf.dst_i, dstInfo{
-			path: filepath.Join(dstf, pfx+src.clean_name),
+			path: found,
+			sha:  src.sha,
+		})
+
+		if isSameFile(found, src.path) {
+			src.todo = "keep"
+		} else {
+			src.todo = "rmrf"
+		}
+
+	} else {
+
+		orgf.dst_i = append(orgf.dst_i, dstInfo{
+			path: filepath.Join(dstf, src.sha+"__"+src.clean_name),
 			sha:  src.sha,
 		})
 
 		src.todo = "move"
-		src.dst_ndx = len(orgf.dst_i) - 1
 
-		return nil
 	}
-
-	sha, err := shasum(found)
-	if err != nil {
-		return err
-	}
-	if sha != src.sha {
-		return errors.New("File " + found + " has a non-matching sha (" + sha + ")")
-	}
-
-	orgf.dst_i = append(orgf.dst_i, dstInfo{
-		path: found,
-		sha:  sha,
-	})
-
-	src.todo = "rmrf"
-	src.dst_ndx = len(orgf.dst_i) - 1
 
 	return nil
+
 }
 
 /*    way/
