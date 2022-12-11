@@ -104,6 +104,14 @@ func loadUserArgs() args {
 	if err != nil {
 		os.Exit(1)
 	}
+
+	args.Src = filepath.Clean(args.Src)
+	dsts := args.Dst
+	args.Dst = []string{}
+	for _, dst := range dsts {
+		args.Dst = append(args.Dst, filepath.Clean(dst))
+	}
+
 	exts := args.Ext
 	args.Ext = []string{}
 	for _, ext := range exts {
