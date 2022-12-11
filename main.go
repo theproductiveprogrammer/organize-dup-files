@@ -231,7 +231,7 @@ func mergeDst_1(orgf *orgF, src *srcInfo) error {
 		if d.IsDir() {
 			return filepath.SkipDir
 		}
-		if strings.HasPrefix(path, pfx) {
+		if strings.HasPrefix(filepath.Base(path), pfx) {
 			found = path
 		}
 		return nil
