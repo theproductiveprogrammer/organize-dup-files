@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/jessevdk/go-flags"
@@ -29,6 +30,28 @@ type srcInfo struct {
 	dst_ndx    int
 
 	todo string
+}
+
+type ByTodo []srcInfo
+
+func (a ByTodo) Len() int           { return len(a) }
+func (a ByTodo) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a ByTodo) Less(i, j int) bool { return as_num_1(a[i].todo) < as_num_1(a[j].todo) }
+func as_num_1(a string) int {
+	i := 0
+	if a == "rmrf" {
+		i = 1
+	}
+	if a == "move" {
+		i = 2
+	}
+	if a == "keep" {
+		i = 3
+	}
+	if a == "mkdir" {
+		i = 4
+	}
+	return i
 }
 
 type dstInfo struct {
@@ -209,7 +232,17 @@ func mergeDst_1(orgf *orgF, src *srcInfo) error {
 	for i, dst := range orgf.dst_i {
 		if dst.sha == src.sha {
 			src.dst_ndx = i
-			src.todo = "keep"
+			if dst.path == src.path {
+				src.todo = "keep"
+			} else {
+				p1, e1 := filepath.Abs(dst.path)
+				p2, e2 := filepath.Abs(src.path)
+				if e1 == nil && e2 == nil && p1 == p2 {
+					src.todo = "keep"
+				} else {
+					src.todo = "rmrf"
+				}
+			}
 			return nil
 		}
 	}
@@ -266,22 +299,37 @@ func mergeDst_1(orgf *orgF, src *srcInfo) error {
 		sha:  sha,
 	})
 
-	src.todo = "exists"
+	src.todo = "rmrf"
 	src.dst_ndx = len(orgf.dst_i) - 1
 
 	return nil
 }
 
+/*    way/
+ * walk the source files and describe what needs to happen to each of
+ * them. Also describe the new directories that need to be created.
+ */
 func describe(orgf orgF) {
-	for _, rule := range orgf.src_i {
-		fmt.Printf("%+v\n", rule)
+	for _, fname := range orgf.mkdir {
+		fmt.Printf("mkdir %s\n", fname)
 	}
-	for _, rule := range orgf.dst_i {
-		fmt.Printf("%+v\n", rule)
+
+	sort.Sort(ByTodo(orgf.src_i))
+	for _, inf := range orgf.src_i {
+		if inf.todo == "keep" {
+			continue
+		}
+		if inf.todo == "move" {
+			fmt.Printf("mv %s\t%s\n", shellName(inf.path), shellName(orgf.dst_i[inf.dst_ndx].path))
+		}
+		if inf.todo == "rmrf" {
+			fmt.Printf("rm %s\t# %s\n", shellName(inf.path), shellName(orgf.dst_i[inf.dst_ndx].path))
+		}
 	}
-	for _, rule := range orgf.mkdir {
-		fmt.Printf("%+v\n", rule)
-	}
+}
+
+func shellName(s string) string {
+	return "'" + strings.Join(strings.Split(s, "'"), `'"'"'`) + "'"
 }
 
 func loadSrc(fpath string, orgf *orgF) error {
