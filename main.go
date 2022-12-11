@@ -39,17 +39,14 @@ func (a ByTodo) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a ByTodo) Less(i, j int) bool { return as_num_1(a[i].todo) < as_num_1(a[j].todo) }
 func as_num_1(a string) int {
 	i := 0
-	if a == "rmrf" {
+	if a == "keep" {
 		i = 1
 	}
 	if a == "move" {
 		i = 2
 	}
-	if a == "keep" {
+	if a == "rmrf" {
 		i = 3
-	}
-	if a == "mkdir" {
-		i = 4
 	}
 	return i
 }
