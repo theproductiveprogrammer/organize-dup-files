@@ -13,6 +13,7 @@ Application Options:
   -s, --src=  the source folder/file (default: .)
   -d, --dst=  the destination folder (default: .)
   -e, --ext=  a list of file extensions to consider
+      --preserve-file-names  if provided, preserve the source filename (default truncates/clean them)
 
 Help Options:
   -h, --help  Show this help message
