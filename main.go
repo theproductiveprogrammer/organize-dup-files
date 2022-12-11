@@ -230,6 +230,11 @@ func mergeDst(orgf *orgF) error {
 	return nil
 }
 
+/*    way/
+ * find an existing destination match for the source
+ * (in memory or on disk) and set the appropriate
+ * action (keep, move, rmrf)
+ */
 func mergeDst_1(orgf *orgF, src *srcInfo) error {
 
 	for i, dst := range orgf.dst_i {
