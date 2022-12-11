@@ -209,7 +209,7 @@ func loadSrcs(orgf *orgF) error {
 
 func extMatches(exts []string, ext string) bool {
 	for _, ext_ := range exts {
-		if ext_ == ext {
+		if strings.EqualFold(ext_, ext) {
 			return true
 		}
 	}
