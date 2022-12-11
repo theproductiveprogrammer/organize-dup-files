@@ -18,7 +18,7 @@ import (
 
 type args struct {
 	Src string   `short:"s" long:"src" default:"." description:"the source folder/file"`
-	Dst string   `short:"d" long:"dst" default:"." description:"the destination folder"`
+	Dst []string `short:"d" long:"dst" default:"." description:"the destination folder"`
 	Ext []string `short:"e" long:"ext" description:"a list of file extensions to consider"`
 	Psv bool     `long:"preserve-file-names" description:"if provided, preserve the source filename (default truncates/clean them)"`
 }
@@ -60,6 +60,7 @@ type dstInfo struct {
 type orgF struct {
 	src_f string
 	dst_f string
+	dst_s []string
 	ext_s []string
 	src_i []srcInfo
 	dst_i []dstInfo
@@ -79,7 +80,8 @@ func main() {
 	} else {
 		orgf := orgF{
 			src_f: args.Src,
-			dst_f: args.Dst,
+			dst_f: args.Dst[0],
+			dst_s: args.Dst,
 			ext_s: args.Ext,
 			src_i: []srcInfo{},
 			dst_i: []dstInfo{},
@@ -248,33 +250,34 @@ func find_in_memory_1(src *srcInfo, dst_i []dstInfo) int {
 	return -1
 }
 
-func find_on_disk_1(src *srcInfo, dstf string, mkdir *[]string) (string, error) {
+func find_on_disk_1(src *srcInfo, dsts []string) (string, error) {
 	var found string
-	pfx := src.sha + "__"
-	err := filepath.WalkDir(dstf, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			if os.IsNotExist(err) {
-				for _, dir := range *mkdir {
-					if dir == dstf {
-						return nil
-					}
+	pfx := dstPfx(src.sha)
+	for _, dst := range dsts {
+		dstf := dstFolder(dst, src.sha)
+		err := filepath.WalkDir(dstf, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				if os.IsNotExist(err) {
+					return nil
+				} else {
+					return err
 				}
-				*mkdir = append(*mkdir, dstf)
+			}
+			if path == dstf {
 				return nil
 			}
-			return err
-		}
-		if path == dstf {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			if strings.HasPrefix(filepath.Base(path), pfx) {
+				found = path
+			}
 			return nil
+		})
+		if err != nil {
+			return "", err
 		}
-		if d.IsDir() {
-			return filepath.SkipDir
-		}
-		if strings.HasPrefix(filepath.Base(path), pfx) {
-			found = path
-		}
-		return nil
-	})
+	}
 
 	if len(found) > 0 {
 		sha, err := shasum(found)
@@ -286,7 +289,7 @@ func find_on_disk_1(src *srcInfo, dstf string, mkdir *[]string) (string, error) 
 		}
 	}
 
-	return found, err
+	return found, nil
 }
 
 /*    way/
@@ -307,8 +310,7 @@ func mergeDst_1(orgf *orgF, src *srcInfo) error {
 		return nil
 	}
 
-	dstf := filepath.Join(orgf.dst_f, src.sha[0:2])
-	found, err := find_on_disk_1(src, dstf, &orgf.mkdir)
+	found, err := find_on_disk_1(src, orgf.dst_s)
 	if err != nil {
 		return err
 	}
@@ -330,7 +332,7 @@ func mergeDst_1(orgf *orgF, src *srcInfo) error {
 	} else {
 
 		orgf.dst_i = append(orgf.dst_i, dstInfo{
-			path: filepath.Join(dstf, src.sha+"__"+src.clean_name),
+			path: dstPath(src, orgf.dst_f),
 			sha:  src.sha,
 		})
 
@@ -340,6 +342,12 @@ func mergeDst_1(orgf *orgF, src *srcInfo) error {
 
 	return nil
 
+}
+
+func dstFolder(dst, sha string) string { return filepath.Join(dst, sha[0:2]) }
+func dstPfx(sha string) string         { return sha + "__" }
+func dstPath(src *srcInfo, dst string) string {
+	return filepath.Join(dstFolder(dst, src.sha), dstPfx(src.sha)+src.clean_name)
 }
 
 /*    way/
