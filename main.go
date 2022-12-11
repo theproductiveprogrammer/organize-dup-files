@@ -64,7 +64,6 @@ type orgF struct {
 	ext_s []string
 	src_i []srcInfo
 	dst_i []dstInfo
-	mkdir []string
 	clean bool
 }
 
@@ -85,7 +84,6 @@ func main() {
 			ext_s: args.Ext,
 			src_i: []srcInfo{},
 			dst_i: []dstInfo{},
-			mkdir: []string{},
 			clean: !args.Psv,
 		}
 		err = mergeMatchingFiles(orgf)
@@ -358,12 +356,41 @@ func dstPath(src *srcInfo, dst string) string {
 	return filepath.Join(dstFolder(dst, src.sha), dstPfx(src.sha)+src.clean_name)
 }
 
+/*  way/
+ * return all directories that are missing from the main destinatin
+ * folder.
+ */
+func missingDirs(orgf orgF) ([]string, error) {
+	mkdir := []string{}
+	dst_f, err := filepath.Abs(orgf.dst_f)
+	if err != nil {
+		return nil, err
+	}
+	for _, src := range orgf.src_i {
+		path := orgf.dst_i[src.dst_ndx].path
+		dst, err := filepath.Abs(path)
+		if err != nil {
+			return nil, err
+		}
+		if strings.HasPrefix(dst, dst_f+"/") {
+			if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+				mkdir = append(mkdir, path)
+			}
+		}
+	}
+	return mkdir, nil
+}
+
 /*    way/
  * walk the source files and describe what needs to happen to each of
  * them. Also describe the new directories that need to be created.
  */
 func describe(orgf orgF) error {
-	for _, fname := range orgf.mkdir {
+	mkdirs, err := missingDirs(orgf)
+	if err != nil {
+		return err
+	}
+	for _, fname := range mkdirs {
 		fmt.Printf("mkdir %s\n", fname)
 	}
 
