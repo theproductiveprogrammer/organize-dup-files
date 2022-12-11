@@ -181,7 +181,10 @@ func mergeMatchingFiles(orgf orgF) error {
 		return err
 	}
 
-	describe(orgf)
+	err = describe(orgf)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -309,7 +312,7 @@ func mergeDst_1(orgf *orgF, src *srcInfo) error {
  * walk the source files and describe what needs to happen to each of
  * them. Also describe the new directories that need to be created.
  */
-func describe(orgf orgF) {
+func describe(orgf orgF) error {
 	for _, fname := range orgf.mkdir {
 		fmt.Printf("mkdir %s\n", fname)
 	}
@@ -318,14 +321,15 @@ func describe(orgf orgF) {
 	for _, inf := range orgf.src_i {
 		if inf.todo == "keep" {
 			continue
-		}
-		if inf.todo == "move" {
+		} else if inf.todo == "move" {
 			fmt.Printf("mv %s\t%s\n", shellName(inf.path), shellName(orgf.dst_i[inf.dst_ndx].path))
-		}
-		if inf.todo == "rmrf" {
+		} else if inf.todo == "rmrf" {
 			fmt.Printf("rm %s\t# %s\n", shellName(inf.path), shellName(orgf.dst_i[inf.dst_ndx].path))
+		} else {
+			return errors.New("UNEXPECTED ERROR 3253: Did not understand status: " + inf.todo)
 		}
 	}
+	return nil
 }
 
 func shellName(s string) string {
