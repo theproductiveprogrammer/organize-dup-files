@@ -19,6 +19,7 @@ import (
 type args struct {
 	Src string   `short:"s" long:"src" default:"." description:"the source folder/file"`
 	Dst []string `short:"d" long:"dst" default:"." description:"the destination folder"`
+	Exc []string `short:"x" long:"exclude" description:"exclude file/folder"`
 	Ext []string `short:"e" long:"ext" description:"a list of file extensions to consider"`
 	Psv bool     `long:"preserve-file-names" description:"if provided, preserve the source filename (default truncates/clean them)"`
 }
@@ -60,6 +61,7 @@ type dstInfo struct {
 type orgF struct {
 	src_f string
 	dst_f string
+	exc_s []string
 	dst_s []string
 	ext_s []string
 	src_i []srcInfo
@@ -80,6 +82,7 @@ func main() {
 		orgf := orgF{
 			src_f: args.Src,
 			dst_f: args.Dst[0],
+			exc_s: args.Exc,
 			dst_s: args.Dst,
 			ext_s: args.Ext,
 			src_i: []srcInfo{},
@@ -121,6 +124,39 @@ func loadUserArgs() args {
 	return args
 }
 
+func shouldIgnore(exclusions []string, path string) bool {
+	for _, ex := range exclusions {
+		if path_matches_1(path, ex) {
+			return true
+		}
+	}
+	return false
+}
+
+/*    way/
+ * to check if two paths match we split them
+ * by their file separators and then compare them
+ */
+func path_matches_1(path, ex string) bool {
+	p_ := strings.FieldsFunc(path, func(r rune) bool { return r == filepath.Separator })
+	e_ := strings.FieldsFunc(ex, func(r rune) bool { return r == filepath.Separator })
+	start := e_[0]
+	for i, p := range p_ {
+		if p == start {
+			matching := true
+			for ii, e := range e_ {
+				if p_[i+ii] != e {
+					matching = false
+				}
+			}
+			if matching {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 /*  way/
  * walk through the files, collect the extensions,
  * and show them to the user
@@ -132,10 +168,16 @@ func listExts(args args) error {
 		if err != nil {
 			return err
 		}
-		if !d.IsDir() {
-			ext := filepath.Ext(path)
-			if len(ext) > 0 {
-				exts[ext] = true
+		if d.IsDir() {
+			if shouldIgnore(args.Exc, path) {
+				return filepath.SkipDir
+			}
+		} else {
+			if !shouldIgnore(args.Exc, path) {
+				ext := filepath.Ext(path)
+				if len(ext) > 0 {
+					exts[ext] = true
+				}
 			}
 		}
 		return nil
@@ -202,11 +244,17 @@ func loadSrcs(orgf *orgF) error {
 		if err != nil {
 			return err
 		}
-		if !d.IsDir() {
-			if extMatches(orgf.ext_s, filepath.Ext(path)) {
-				err := loadSrc(path, orgf)
-				if err != nil {
-					return err
+		if d.IsDir() {
+			if shouldIgnore(orgf.exc_s, path) {
+				return filepath.SkipDir
+			}
+		} else {
+			if !shouldIgnore(orgf.exc_s, path) {
+				if extMatches(orgf.ext_s, filepath.Ext(path)) {
+					err := loadSrc(path, orgf)
+					if err != nil {
+						return err
+					}
 				}
 			}
 		}
