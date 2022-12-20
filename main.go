@@ -415,7 +415,7 @@ func missingDirs(orgf orgF) ([]string, error) {
 		return nil, err
 	}
 	for _, src := range orgf.src_i {
-		path := orgf.dst_i[src.dst_ndx].path
+		path := filepath.Dir(orgf.dst_i[src.dst_ndx].path)
 		dst, err := filepath.Abs(path)
 		if err != nil {
 			return nil, err
