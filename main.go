@@ -401,7 +401,11 @@ func mergeDst_1(orgf *orgF, src *srcInfo) error {
 func dstFolder(dst, sha string) string { return filepath.Join(dst, sha[0:2]) }
 func dstPfx(sha string) string         { return sha + "__" }
 func dstPath(src *srcInfo, dst string) string {
-	return filepath.Join(dstFolder(dst, src.sha), dstPfx(src.sha)+src.clean_name)
+	pfx := dstPfx(src.sha)
+	if strings.HasPrefix(src.clean_name, pfx) {
+		pfx = ""
+	}
+	return filepath.Join(dstFolder(dst, src.sha), pfx+src.clean_name)
 }
 
 /*  way/
