@@ -522,20 +522,41 @@ func shasum(fpath string) (string, error) {
  * because we have a unique sha as the name, we only need
  * to keep what we think is valid text to give it more context
  */
-var m1 *regexp.Regexp = regexp.MustCompile(`[^A-Za-z0-9*~!@#$%^&*]+`)
-var m2 *regexp.Regexp = regexp.MustCompile(`^.*?[A-Za-z][A-Za-z][A-Za-z]+`)
+var m0 *regexp.Regexp = regexp.MustCompile(`["']`)
+var m1 *regexp.Regexp = regexp.MustCompile(`[^A-Za-z0-9]+`)
+var m2 *regexp.Regexp = regexp.MustCompile(`[A-Za-z][A-Za-z][A-Za-z]+`)
+var small_words []string = []string{
+	"in", "of", "to", "is", "it", "on",
+	"no", "us", "at", "un", "go", "an",
+	"my", "up", "me", "as", "he", "we",
+	"so", "be", "by", "or", "do", "if ",
+	"hi", "bi", "ex", "ok",
+}
 
+func isSmallWord(s string) bool {
+	for _, w := range small_words {
+		if w == strings.ToLower(s) {
+			return true
+		}
+	}
+	return false
+}
 func clean_1(n string) string {
 	ext := filepath.Ext(n)
 	n = n[:len(n)-len(ext)]
-	name := m1.ReplaceAllString(n, "_")
+	name := m0.ReplaceAllString(n, "")
+	name = m1.ReplaceAllString(name, "_")
 
 	s := strings.Split(name, "_")
 	r := []string{}
 	for _, s_ := range s {
-		s_ = m2.FindString(s_)
-		if len(s_) > 0 {
+		if isSmallWord(s_) {
 			r = append(r, s_)
+		} else {
+			s_ = m2.FindString(s_)
+			if len(s_) > 0 {
+				r = append(r, s_)
+			}
 		}
 	}
 
