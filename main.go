@@ -76,8 +76,13 @@ type orgF struct {
 func main() {
 	var err error
 	args := loadUserArgs()
+	err, fpaths := loadSrcFiles(args)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
 	if len(args.Ext) == 0 {
-		err = listExts(args)
+		err = listExts(args.Src, fpaths)
 	} else {
 		orgf := orgF{
 			src_f: args.Src,
@@ -89,7 +94,7 @@ func main() {
 			dst_i: []dstInfo{},
 			clean: !args.Psv,
 		}
-		err = mergeMatchingFiles(orgf)
+		err = mergeMatchingFiles(fpaths, orgf)
 	}
 
 	if err != nil {
@@ -161,8 +166,8 @@ func path_matches_1(path, ex string) bool {
  * walk through the files, collect the extensions,
  * and show them to the user
  */
-func listExts(args args) error {
-	exts := make(map[string]bool)
+func loadSrcFiles(args args) (error, []string) {
+	fpaths := []string{}
 
 	err := filepath.WalkDir(args.Src, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -174,23 +179,37 @@ func listExts(args args) error {
 			}
 		} else {
 			if !shouldIgnore(args.Exc, path) {
-				ext := filepath.Ext(path)
-				if len(ext) > 0 {
-					exts[ext] = true
-				}
+				fpaths = append(fpaths, path)
 			}
 		}
 		return nil
 	})
 	if err != nil {
-		return err
+		return err, nil
+	}
+
+	return nil, fpaths
+}
+
+/*  way/
+ * walk through the files, collect the extensions,
+ * and show them to the user
+ */
+func listExts(srcpath string, fpaths []string) error {
+	exts := make(map[string]bool)
+
+	for _, path := range fpaths {
+		ext := filepath.Ext(path)
+		if len(ext) > 0 {
+			exts[ext] = true
+		}
 	}
 
 	if len(exts) == 0 {
-		return errors.New("Found no filename extensions in " + args.Src)
+		return errors.New("Found no filename extensions in " + srcpath)
 	}
 
-	fmt.Printf("Found the following extensions (%s):\n\n", args.Src)
+	fmt.Printf("Found the following extensions (%s):\n\n", srcpath)
 
 	var ext_ string
 	i := 0
@@ -219,9 +238,9 @@ func listExts(args args) error {
  * with files existing in the destination to
  * describe how the sources move into the destination
  */
-func mergeMatchingFiles(orgf orgF) error {
+func mergeMatchingFiles(fpaths []string, orgf orgF) error {
 
-	err := loadSrcs(&orgf)
+	err := loadSrcInfos(fpaths, &orgf)
 	if err != nil {
 		return err
 	}
@@ -239,28 +258,14 @@ func mergeMatchingFiles(orgf orgF) error {
 	return nil
 }
 
-func loadSrcs(orgf *orgF) error {
-	return filepath.WalkDir(orgf.src_f, func(path string, d fs.DirEntry, err error) error {
+func loadSrcInfos(fpaths []string, orgf *orgF) error {
+	for _, path := range fpaths {
+		err := loadSrcInfo(path, orgf)
 		if err != nil {
 			return err
 		}
-		if d.IsDir() {
-			if shouldIgnore(orgf.exc_s, path) {
-				return filepath.SkipDir
-			}
-		} else {
-			if !shouldIgnore(orgf.exc_s, path) {
-				if extMatches(orgf.ext_s, filepath.Ext(path)) {
-					err := loadSrc(path, orgf)
-					if err != nil {
-						return err
-					}
-				}
-			}
-		}
-
-		return nil
-	})
+	}
+	return nil
 }
 
 func extMatches(exts []string, ext string) bool {
@@ -482,7 +487,7 @@ func shellName(s string) string {
 	return "'" + strings.Join(strings.Split(s, "'"), `'"'"'`) + "'"
 }
 
-func loadSrc(fpath string, orgf *orgF) error {
+func loadSrcInfo(fpath string, orgf *orgF) error {
 	sha, err := shasum(fpath)
 	if err != nil {
 		return err
