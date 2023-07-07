@@ -69,6 +69,18 @@ type orgF struct {
 	clean bool
 }
 
+type pathInfo struct {
+	fpath string
+	info  fs.FileInfo
+}
+type ByTime []pathInfo
+
+func (a ByTime) Len() int      { return len(a) }
+func (a ByTime) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a ByTime) Less(i, j int) bool {
+	return a[i].info.ModTime().UnixMilli() < a[j].info.ModTime().UnixMilli()
+}
+
 /*    way/
  * if not given any extensions, walk the source and list out the extensions,
  * otherwise merge the matching files into the destination
@@ -82,6 +94,8 @@ func main() {
 		os.Exit(1)
 	}
 	if len(args.Ext) == 0 {
+		listFiles(fpaths)
+		fmt.Println()
 		err = listExts(args.Src, fpaths)
 	} else {
 		orgf := orgF{
@@ -189,6 +203,29 @@ func loadSrcFiles(args args) (error, []string) {
 	}
 
 	return nil, fpaths
+}
+
+func listFiles(fpaths []string) error {
+	infos := []pathInfo{}
+	for _, fpath := range fpaths {
+		info, err := os.Stat(fpath)
+		if err != nil {
+			return err
+		}
+		infos = append(infos, pathInfo{
+			fpath: fpath,
+			info:  info,
+		})
+	}
+
+	sort.Sort(ByTime(infos))
+
+	for _, i := range infos {
+		o := fmt.Sprintf("%v\t%v", i.info.ModTime().Format("Mon Jan 02 2006"), i.fpath)
+		fmt.Println(o)
+	}
+
+	return nil
 }
 
 /*  way/
