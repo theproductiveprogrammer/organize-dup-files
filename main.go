@@ -121,6 +121,9 @@ func main() {
 func loadUserArgs() args {
 	args := args{}
 	_, err := flags.Parse(&args)
+	if flags.WroteHelp(err) {
+		os.Exit(0)
+	}
 	if err != nil {
 		os.Exit(1)
 	}
