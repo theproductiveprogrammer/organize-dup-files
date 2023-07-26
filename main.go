@@ -180,8 +180,7 @@ func path_matches_1(path, ex string) bool {
 }
 
 /*  way/
- * walk through the files, collect the extensions,
- * and show them to the user
+ * walk through the files and pick up the ones requested
  */
 func loadSrcFiles(args args) (error, []string) {
 	fpaths := []string{}
@@ -196,7 +195,9 @@ func loadSrcFiles(args args) (error, []string) {
 			}
 		} else {
 			if !shouldIgnore(args.Exc, path) {
-				fpaths = append(fpaths, path)
+				if len(args.Ext) == 0 || extMatches(args.Ext, filepath.Ext(path)) {
+					fpaths = append(fpaths, path)
+				}
 			}
 		}
 		return nil
