@@ -94,9 +94,11 @@ func main() {
 		os.Exit(1)
 	}
 	if len(args.Ext) == 0 {
-		listFiles(fpaths)
-		fmt.Println()
-		err = listExts(args.Src, fpaths)
+		err = listFiles(fpaths)
+		if err == nil {
+			fmt.Println()
+			err = listExts(args.Src, fpaths)
+		}
 	} else {
 		orgf := orgF{
 			src_f: args.Src,
