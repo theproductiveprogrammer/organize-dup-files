@@ -214,7 +214,7 @@ func loadSrcFiles(args args) (error, []string) {
 func listFiles(fpaths []string) error {
 	infos := []pathInfo{}
 	for _, fpath := range fpaths {
-		info, err := os.Stat(fpath)
+		info, err := os.Lstat(fpath)
 		if err != nil {
 			return err
 		}
